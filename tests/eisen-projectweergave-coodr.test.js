@@ -21,6 +21,31 @@ function readEisen() {
   return fs.readFileSync(EISEN_PATH, "utf8");
 }
 
+/** Haalt de tabelrij/regel voor een eis-ID op (tot volgende E-xx of einde tabelblok). */
+function extractEisBlock(content, id) {
+  const re = new RegExp(
+    `\\|\\s*${id}\\s*\\|([^|]*(?:\\|[^|]*){0,2})`,
+    "i"
+  );
+  const m = content.match(re);
+  return m ? m[0] : null;
+}
+
+/** True als CSS sibling-spacing (gap/margin) tussen .solution-card definieert. */
+function cssHasSolutionCardSiblingSpacing(css) {
+  const cardBlock = css.match(/\.solution-card\s*\{[^}]*\}/);
+  if (cardBlock && /\b(margin|gap)\s*:/.test(cardBlock[0])) {
+    // margin op de kaart zelf telt alleen als vertical sibling-spacing (niet alleen interne layout)
+    if (/\bmargin(-(top|bottom))?\s*:\s*[^;]*[1-9]/.test(cardBlock[0])) return true;
+    if (/\bgap\s*:\s*[^;]*[1-9]/.test(cardBlock[0])) return true;
+  }
+  // gap op .solutions of adjacent-sibling selectors
+  if (/\.solutions\s*\{[^}]*\bgap\s*:/.test(css)) return true;
+  if (/\.solution-card\s*\+\s*\.solution-card\s*\{[^}]*\bmargin/.test(css)) return true;
+  if (/\.solutions\s+[^{]*\{[^}]*\bgap\s*:/.test(css)) return true;
+  return false;
+}
+
 describe("Acceptatiecriterium: document met projectweergave-eisen", () => {
   it("bestaat op docs/eisen-projectweergave-coodr.md", () => {
     assert.ok(fs.existsSync(EISEN_PATH));
@@ -60,6 +85,18 @@ describe("Eiseninhoud: plaatsing en sectiestructuur", () => {
     const content = readEisen();
     assert.match(content, /E-04/);
     assert.match(content, /tussenruimte|stapelen|1\s*rem/i);
+  });
+
+  it("maakt in E-04 expliciet dat card-spacing bij implementatie moet worden toegevoegd", () => {
+    const content = readEisen();
+    const e04Block = extractEisBlock(content, "E-04");
+    assert.ok(e04Block, "E-04-regel ontbreekt");
+    // CSS heeft nu geen gap/margin tussen .solution-card; eis mag niet doen alsof die al bestaat.
+    assert.match(
+      e04Block,
+      /implementatie|toegevoegd|toevoegen|nog geen|gap|margin/i,
+      "E-04 moet expliciet maken dat spacing bij implementatie nog moet worden toegevoegd"
+    );
   });
 
   it("behoudt desktop-layout .bottom-grid (E-05)", () => {
@@ -216,5 +253,79 @@ describe("Implementatie-acceptatiecriteria in het document (sectie 9)", () => {
     assert.match(content, /Candidakuur/);
     assert.match(content, /regressie|Contact/i);
     assert.match(content, /Media|beeld/i);
+  });
+});
+
+describe("Should/Could-eisen aanwezig (aanvullende dekking)", () => {
+  it("legt lengte beschrijving vast (E-11)", () => {
+    const content = readEisen();
+    assert.match(content, /E-11/);
+    assert.match(content, /1\s*[–-]\s*2\s*zinnen|1–2 zinnen/i);
+  });
+
+  it("legt geen fallback-URL vast (E-15)", () => {
+    const content = readEisen();
+    assert.match(content, /E-15/);
+    assert.match(content, /fallback|niet bereikbaar/i);
+  });
+
+  it("legt SEO-scope vast (E-31)", () => {
+    const content = readEisen();
+    assert.match(content, /E-31/);
+    assert.match(content, /meta|OG|SEO/i);
+  });
+});
+
+describe("Eiseninhoud: responsive en a11y-detail", () => {
+  it("eist leesbaarheid op mobiel ≥320px (E-23)", () => {
+    const content = readEisen();
+    assert.match(content, /E-23/);
+    assert.match(content, /320\s*px|mobiel/i);
+    assert.match(content, /overflow/i);
+  });
+
+  it("eist begrijpelijke linktekst zonder context (E-25)", () => {
+    const content = readEisen();
+    assert.match(content, /E-25/);
+    assert.match(content, /linktekst|domeinnaam|zonder.*context/i);
+  });
+
+  it("eist contrast gelijk aan bestaande kaarten (E-26)", () => {
+    const content = readEisen();
+    assert.match(content, /E-26/);
+    assert.match(content, /contrast/i);
+  });
+
+  it("verbiedt uitsluitend kleur-afhankelijke informatie (E-27)", () => {
+    const content = readEisen();
+    assert.match(content, /E-27/);
+    assert.match(content, /kleur/i);
+  });
+});
+
+describe("Traceerbaarheid en projectdoel", () => {
+  it("koppelt projectdoel aan eis-IDs (sectie 10)", () => {
+    const content = readEisen();
+    assert.match(content, /##\s*10\.\s*Traceerbaarheid/i);
+    assert.match(content, /E-01\s*t\/m\s*E-05|E-01.*E-05/i);
+    assert.match(content, /E-06\s*t\/m\s*E-19|E-06.*E-19/i);
+    assert.match(content, /Dit document/i);
+  });
+});
+
+describe("CSS-baseline: spacing tussen solution-cards (E-04-context)", () => {
+  it("heeft nu geen gap/margin tussen .solution-card-siblings (spacing moet bij implementatie)", () => {
+    const css = fs.readFileSync(CSS_PATH, "utf8");
+    assert.equal(
+      cssHasSolutionCardSiblingSpacing(css),
+      false,
+      "Verwacht: nog geen sibling-spacing op .solution-card; bij wijziging E-04/tests herzien"
+    );
+  });
+
+  it("heeft precies één .solution-card in index.html (Candidakuur)", () => {
+    const html = fs.readFileSync(INDEX_PATH, "utf8");
+    const cards = html.match(/class="solution-card"/g) || [];
+    assert.equal(cards.length, 1, "Baseline: alleen Candidakuur-kaart tot Coodr-implementatie");
   });
 });
