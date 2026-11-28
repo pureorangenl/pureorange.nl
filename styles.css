@@ -148,6 +148,10 @@ body {
   padding: 1.35rem 1.4rem 1.45rem;
 }
 
+.solution-card + .solution-card {
+  margin-top: 1rem;
+}
+
 .solution-card h3 {
   margin: 0;
   font-size: 1.05rem;
